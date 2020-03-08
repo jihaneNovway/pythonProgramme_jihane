@@ -14,6 +14,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import javax.script.SimpleScriptContext;
+import javax.websocket.server.PathParam;
 
 import net.sf.json.JSONObject;
 import net.sf.json.JSONSerializer;
@@ -36,13 +37,11 @@ public class PhtyonPrommeController {
 	private final List<Long> sessionIds = new ArrayList<>();
 	
 	@RequestMapping(value = "/execute", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-	public List<Python> executePhyton(@RequestBody String code,
-			@PathVariable Long sessionId) {
+	public List<Python> executePhyton(@RequestBody Python python) {
 		// add sessionId to know if we should renisialize the varriable
-		sessionIds.add(sessionId);
-
+		Long sessionId = python.getSessionId();
 		// get the content of the code value
-		JSONObject json = (JSONObject) JSONSerializer.toJSON(code);
+		JSONObject json = (JSONObject) JSONSerializer.toJSON(python);
 		String cmdPhyton = json.getString("code");
 
 		// create a new file .py if not exist and if this is a new user
@@ -50,10 +49,11 @@ public class PhtyonPrommeController {
 		File file = null;
 		try {
 			file = new File("pyhton.py");
-			if (!file.exists() && !sessionIds.contains(sessionId)) {
+			if (!file.exists() ||( sessionId !=null && !sessionIds.contains(sessionId))) {
 				file.createNewFile();
+			}else {
+				content = Files.toString(file, Charsets.UTF_8);
 			}
-			content = Files.toString(file, Charsets.UTF_8);
 		} catch (IOException e2) {
 			e2.printStackTrace();
 		}
@@ -74,7 +74,7 @@ public class PhtyonPrommeController {
 		ScriptContext context = new SimpleScriptContext();
 		context.setWriter(output);
 		ScriptEngine engine = manager
-				.getEngineByName(cmdPhyton.split(" ", 2)[0]);
+				.getEngineByName(cmdPhyton.split(" ", 2)[0].replace("%", ""));
 		try {
 			engine.eval(new FileReader(file.getPath()), context);
 		} catch (FileNotFoundException e) {
@@ -82,6 +82,10 @@ public class PhtyonPrommeController {
 		} catch (ScriptException e) {
 			e.printStackTrace();
 		}
+		if(sessionId !=null){
+			sessionIds.add(sessionId);
+			}
+		
 		System.out.println(output.toString());
 
 		Python result = new Python();
